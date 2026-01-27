@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>RTK Rover Dashboard</title>
+  <script src="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.js"></script>
+  <link href="https://api.mapbox.com/mapbox-gl-js/v3.0.1/mapbox-gl.css" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Status Panel -->
+    <div id="status-panel">
+      <h1>RTK Rover Dashboard</h1>
+      <div class="firmware-version" id="firmware-version">Firmware: --</div>
+
+      <div class="status-section">
+        <div class="status-indicator" id="connection-status">
+          <span class="dot"></span>
+          <span class="label">Connecting...</span>
+        </div>
+      </div>
+
+      <div class="status-section">
+        <h2>Fix Status</h2>
+        <div class="fix-status" id="fix-status">--</div>
+        <div class="fix-rate" id="fix-rate">Fixed Rate: --</div>
+      </div>
+
+      <div class="status-section">
+        <h2>Position</h2>
+        <div class="data-row">
+          <span class="label">Latitude:</span>
+          <span class="value" id="latitude">--</span>
+        </div>
+        <div class="data-row">
+          <span class="label">Longitude:</span>
+          <span class="value" id="longitude">--</span>
+        </div>
+        <div class="data-row">
+          <span class="label">Altitude:</span>
+          <span class="value" id="altitude">--</span>
+        </div>
+      </div>
+
+      <div class="status-section">
+        <h2>Accuracy</h2>
+        <div class="data-row">
+          <span class="label">Horizontal:</span>
+          <span class="value" id="h-acc">--</span>
+        </div>
+        <div class="data-row">
+          <span class="label">Vertical:</span>
+          <span class="value" id="v-acc">--</span>
+        </div>
+      </div>
+
+      <div class="status-section">
+        <h2>Satellites</h2>
+        <div class="satellite-count" id="satellite-count">--</div>
+      </div>
+
+      <div class="status-section">
+        <h2>RTCM Data</h2>
+        <div class="data-row">
+          <span class="label">Received:</span>
+          <span class="value" id="rtcm-bytes">--</span>
+        </div>
+      </div>
+
+      <div class="status-section">
+        <h2>Battery</h2>
+        <div class="battery-display">
+          <div class="battery-bar">
+            <div class="battery-fill" id="battery-fill"></div>
+          </div>
+          <span class="battery-pct" id="battery-pct">--%</span>
+        </div>
+      </div>
+
+      <div class="status-section timestamp">
+        <span id="timestamp">Last update: --</span>
+      </div>
+
+      <div class="status-section">
+        <h2>Heading</h2>
+        <div class="heading-display" id="heading-display">0°</div>
+        <input type="range" id="heading-slider" min="0" max="359" value="0" class="heading-slider">
+        <div class="heading-note">Manual control (until UM982 installed)</div>
+      </div>
+
+      <div class="status-section">
+        <h2>Location Mode</h2>
+        <select id="location-mode" class="location-select">
+          <option value="live">Live GPS</option>
+          <option value="nome">Nome, Alaska (Test)</option>
+        </select>
+      </div>
+
+      <div class="status-section">
+        <h2>Display Mode</h2>
+        <label class="layer-toggle">
+          <input type="radio" name="display-mode" id="display-dredge" value="dredge" checked>
+          Full Dredge
+        </label>
+        <label class="layer-toggle">
+          <input type="radio" name="display-mode" id="display-simple" value="simple">
+          Simple Marker (3ft circle)
+        </label>
+      </div>
+
+      <div class="status-section">
+        <h2>Trail Layers</h2>
+        <label class="layer-toggle">
+          <input type="checkbox" id="layer-piloting" checked>
+          <span class="layer-color" style="background: #00d9ff;"></span>
+          Piloting Trail
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" id="layer-suction" checked>
+          <span class="layer-color" style="background: #ff6600;"></span>
+          Suction Trail
+        </label>
+        <label class="layer-toggle">
+          <input type="checkbox" id="layer-tailings" checked>
+          <span class="layer-color" style="background: #8B4513;"></span>
+          Tailings Trail
+        </label>
+        <div class="trail-controls">
+          <button id="btn-clear-trails" class="btn-small">Clear Trails</button>
+          <button id="btn-export-trails" class="btn-small">Export</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Map Container -->
+    <div id="map"></div>
+  </div>
+
+  <script src="config.js"></script>
+  <script src="dredge-config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
