@@ -25,6 +25,13 @@ class RoverDashboard {
     // Minimum distance (meters) between trail points to avoid clutter
     this.minTrailDistance = 0.5;
 
+    // Survey marks from PORTABLE_DASHBOARD
+    this.marks = [];
+    this.markMarkers = {};
+
+    // Measurement lines
+    this.measurementLines = [];
+
     this.init();
   }
 
@@ -35,6 +42,7 @@ class RoverDashboard {
     this.initDisplayModeControl();
     this.initLayerControls();
     this.initTrailControls();
+    this.initMarksControls();
     this.connectWebSocket();
     this.startStaleChecker();
     this.loadTrailsFromStorage();
@@ -386,6 +394,12 @@ class RoverDashboard {
       const message = JSON.parse(event.data);
       if (message.type === 'position') {
         this.updateDashboard(message.data);
+      } else if (message.type === 'marks') {
+        // Full marks list on connect
+        this.marks = message.data;
+        this.renderAllMarks();
+      } else if (message.type === 'mark') {
+        this.handleMarkEvent(message);
       }
     };
 
@@ -757,6 +771,277 @@ class RoverDashboard {
         this.setConnectionStatus('disconnected', 'Stale');
       }
     }, 1000);
+  }
+
+  // ============================================================================
+  // Survey Marks
+  // ============================================================================
+
+  initMarksControls() {
+    document.getElementById('btn-clear-marks').addEventListener('click', () => {
+      if (confirm('Delete all survey marks? This cannot be undone.')) {
+        this.clearAllMarks();
+      }
+    });
+
+    document.getElementById('btn-clear-lines').addEventListener('click', () => {
+      this.clearMeasurementLines();
+    });
+  }
+
+  handleMarkEvent(msg) {
+    switch (msg.action) {
+      case 'create':
+        this.marks.push(msg.data);
+        this.addMarkToMap(msg.data);
+        this.checkForMeasurementLine(msg.data);
+        break;
+
+      case 'delete':
+        this.marks = this.marks.filter(m => m.id !== msg.data.id);
+        this.removeMarkFromMap(msg.data.id);
+        break;
+
+      case 'update':
+        const idx = this.marks.findIndex(m => m.id === msg.data.id);
+        if (idx >= 0) this.marks[idx] = msg.data;
+        break;
+
+      case 'clear':
+        this.marks = [];
+        this.clearAllMarksFromMap();
+        break;
+    }
+
+    this.updateMarksUI();
+  }
+
+  renderAllMarks() {
+    this.clearAllMarksFromMap();
+    this.marks.forEach(mark => this.addMarkToMap(mark));
+    this.detectMeasurementLines();
+    this.updateMarksUI();
+  }
+
+  addMarkToMap(mark) {
+    const el = document.createElement('div');
+    el.className = 'survey-mark-marker';
+    el.title = `${mark.label}\n${mark.latitude.toFixed(9)}, ${mark.longitude.toFixed(9)}`;
+
+    const marker = new mapboxgl.Marker({ element: el })
+      .setLngLat([mark.longitude, mark.latitude])
+      .addTo(this.map);
+
+    this.markMarkers[mark.id] = marker;
+  }
+
+  removeMarkFromMap(id) {
+    if (this.markMarkers[id]) {
+      this.markMarkers[id].remove();
+      delete this.markMarkers[id];
+    }
+  }
+
+  clearAllMarksFromMap() {
+    Object.values(this.markMarkers).forEach(marker => marker.remove());
+    this.markMarkers = {};
+  }
+
+  updateMarksUI() {
+    document.getElementById('marks-count').textContent = this.marks.length;
+    document.getElementById('lines-count').textContent = this.measurementLines.length;
+
+    const list = document.getElementById('marks-list');
+    if (this.marks.length === 0) {
+      list.innerHTML = '<div style="text-align: center; color: #666; padding: 10px;">No marks</div>';
+      return;
+    }
+
+    list.innerHTML = this.marks.map(mark => `
+      <div class="mark-item" data-id="${mark.id}">
+        <div>
+          <span class="mark-label">${mark.label}</span>
+          <div class="mark-coords">${mark.latitude.toFixed(7)}, ${mark.longitude.toFixed(7)}</div>
+        </div>
+        <button class="mark-delete" data-id="${mark.id}">&times;</button>
+      </div>
+    `).join('');
+
+    // Attach delete handlers
+    list.querySelectorAll('.mark-delete').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        this.deleteMark(id);
+      });
+    });
+
+    // Attach click to fly to mark
+    list.querySelectorAll('.mark-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.classList.contains('mark-delete')) return;
+        const id = parseInt(item.dataset.id);
+        const mark = this.marks.find(m => m.id === id);
+        if (mark) {
+          this.map.flyTo({ center: [mark.longitude, mark.latitude], zoom: 19 });
+        }
+      });
+    });
+  }
+
+  async deleteMark(id) {
+    try {
+      await fetch(`${CONFIG.API_URL}/api/marks/${id}`, { method: 'DELETE' });
+    } catch (e) {
+      console.error('Error deleting mark:', e);
+    }
+  }
+
+  async clearAllMarks() {
+    try {
+      await fetch(`${CONFIG.API_URL}/api/marks`, { method: 'DELETE' });
+      this.clearMeasurementLines();
+    } catch (e) {
+      console.error('Error clearing marks:', e);
+    }
+  }
+
+  // ============================================================================
+  // Measurement Lines
+  // ============================================================================
+
+  /**
+   * Check if a new mark completes a measurement pair (consecutive RM_x marks)
+   */
+  checkForMeasurementLine(newMark) {
+    // Look for the previous mark (RM_n-1)
+    const match = newMark.label.match(/^RM_(\d+)$/);
+    if (!match) return;
+
+    const num = parseInt(match[1]);
+    if (num <= 1) return;
+
+    const prevLabel = `RM_${num - 1}`;
+    const prevMark = this.marks.find(m => m.label === prevLabel);
+
+    if (prevMark) {
+      const distance = this.haversineDistance(
+        prevMark.latitude, prevMark.longitude,
+        newMark.latitude, newMark.longitude
+      );
+      this.addMeasurementLine(prevMark, newMark, distance);
+    }
+  }
+
+  /**
+   * Detect all measurement lines from existing marks
+   */
+  detectMeasurementLines() {
+    this.clearMeasurementLines();
+
+    // Sort marks by RM_x number
+    const rmMarks = this.marks
+      .filter(m => /^RM_\d+$/.test(m.label))
+      .sort((a, b) => {
+        const numA = parseInt(a.label.match(/^RM_(\d+)$/)[1]);
+        const numB = parseInt(b.label.match(/^RM_(\d+)$/)[1]);
+        return numA - numB;
+      });
+
+    // Find consecutive pairs
+    for (let i = 0; i < rmMarks.length - 1; i++) {
+      const markA = rmMarks[i];
+      const markB = rmMarks[i + 1];
+
+      const numA = parseInt(markA.label.match(/^RM_(\d+)$/)[1]);
+      const numB = parseInt(markB.label.match(/^RM_(\d+)$/)[1]);
+
+      // Only connect consecutive marks
+      if (numB === numA + 1) {
+        const distance = this.haversineDistance(
+          markA.latitude, markA.longitude,
+          markB.latitude, markB.longitude
+        );
+        this.addMeasurementLine(markA, markB, distance);
+      }
+    }
+  }
+
+  addMeasurementLine(startMark, endMark, distance) {
+    const lineId = `measure-line-${startMark.id}-${endMark.id}`;
+    const startCoord = [startMark.longitude, startMark.latitude];
+    const endCoord = [endMark.longitude, endMark.latitude];
+
+    // Add line source and layer
+    this.map.addSource(lineId, {
+      type: 'geojson',
+      data: {
+        type: 'Feature',
+        geometry: {
+          type: 'LineString',
+          coordinates: [startCoord, endCoord]
+        }
+      }
+    });
+
+    this.map.addLayer({
+      id: lineId,
+      type: 'line',
+      source: lineId,
+      paint: {
+        'line-color': '#f59e0b',
+        'line-width': 3,
+        'line-dasharray': [2, 1]
+      }
+    });
+
+    // Create distance label at midpoint
+    const midLng = (startCoord[0] + endCoord[0]) / 2;
+    const midLat = (startCoord[1] + endCoord[1]) / 2;
+
+    const labelEl = document.createElement('div');
+    labelEl.className = 'distance-label';
+    labelEl.textContent = this.formatDistance(distance);
+
+    const labelMarker = new mapboxgl.Marker({ element: labelEl })
+      .setLngLat([midLng, midLat])
+      .addTo(this.map);
+
+    this.measurementLines.push({
+      startMark,
+      endMark,
+      distance,
+      lineId,
+      labelMarker
+    });
+
+    this.updateMarksUI();
+  }
+
+  formatDistance(meters) {
+    if (meters >= 1000) {
+      return `${(meters / 1000).toFixed(3)} km`;
+    } else if (meters >= 1) {
+      return `${meters.toFixed(3)} m`;
+    } else {
+      return `${(meters * 100).toFixed(1)} cm`;
+    }
+  }
+
+  clearMeasurementLines() {
+    this.measurementLines.forEach(m => {
+      if (this.map.getLayer(m.lineId)) {
+        this.map.removeLayer(m.lineId);
+      }
+      if (this.map.getSource(m.lineId)) {
+        this.map.removeSource(m.lineId);
+      }
+      if (m.labelMarker) {
+        m.labelMarker.remove();
+      }
+    });
+    this.measurementLines = [];
+    this.updateMarksUI();
   }
 }
 

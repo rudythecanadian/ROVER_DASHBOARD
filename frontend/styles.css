@@ -281,6 +281,97 @@ body {
   background: #1a4a7a;
 }
 
+.btn-small.btn-danger {
+  border-color: #ff4444;
+  color: #ff4444;
+}
+
+.btn-small.btn-danger:hover {
+  background: rgba(255, 68, 68, 0.2);
+}
+
+/* Survey Marks */
+.marks-count {
+  font-size: 1.2rem;
+  text-align: center;
+  color: #00d9ff;
+  margin-bottom: 10px;
+}
+
+.marks-lines-count {
+  color: #f59e0b;
+}
+
+.marks-list {
+  max-height: 150px;
+  overflow-y: auto;
+  margin-bottom: 10px;
+}
+
+.mark-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  background: #0f3460;
+  border-radius: 4px;
+  margin-bottom: 4px;
+  font-size: 0.85rem;
+}
+
+.mark-item .mark-label {
+  font-weight: 600;
+  color: #00d9ff;
+}
+
+.mark-item .mark-coords {
+  font-family: 'SF Mono', monospace;
+  font-size: 0.75rem;
+  color: #888;
+}
+
+.mark-item .mark-delete {
+  background: none;
+  border: none;
+  color: #ff4444;
+  cursor: pointer;
+  padding: 2px 6px;
+  font-size: 1rem;
+}
+
+.mark-item .mark-delete:hover {
+  color: #ff6666;
+}
+
+.marks-controls {
+  display: flex;
+  gap: 8px;
+}
+
+/* Survey mark markers on map */
+.survey-mark-marker {
+  width: 20px;
+  height: 20px;
+  background: #2563eb;
+  border: 2px solid #fff;
+  border-radius: 50%;
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.3);
+}
+
+/* Distance label on map */
+.distance-label {
+  background: rgba(0, 0, 0, 0.8);
+  color: #f59e0b;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  font-family: 'SF Mono', Monaco, monospace;
+  white-space: nowrap;
+  pointer-events: none;
+}
+
 /* Location Select */
 .location-select {
   width: 100%;

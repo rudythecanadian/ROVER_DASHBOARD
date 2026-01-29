@@ -21,6 +21,13 @@ app.use(express.json());
 // Serve static frontend files
 app.use(express.static(path.join(__dirname, '../frontend')));
 
+// Serve PORTABLE_DASHBOARD at /portable
+// Works with both local dev (../../PORTABLE_DASHBOARD) and server (../portable)
+const portablePath = require('fs').existsSync(path.join(__dirname, '../portable'))
+  ? path.join(__dirname, '../portable')
+  : path.join(__dirname, '../../PORTABLE_DASHBOARD');
+app.use('/portable', express.static(portablePath));
+
 // Store latest rover state
 let roverState = {
   latitude: null,
@@ -41,6 +48,10 @@ let roverState = {
   last_update: null
 };
 
+// Store marked locations
+let marks = [];
+let markCounter = 0;
+
 // OTA firmware version - update this when you upload new firmware
 const OTA_FIRMWARE_VERSION = '1.0.0';
 
@@ -60,6 +71,11 @@ wss.on('connection', (ws) => {
   // Send current state immediately on connect
   if (roverState.latitude !== null) {
     ws.send(JSON.stringify({ type: 'position', data: roverState }));
+  }
+
+  // Send existing marks
+  if (marks.length > 0) {
+    ws.send(JSON.stringify({ type: 'marks', data: marks }));
   }
 
   ws.on('close', () => {
@@ -145,6 +161,95 @@ app.get('/api/health', (req, res) => {
   });
 });
 
+// ============================================================================
+// MARKS API - Save and retrieve marked locations
+// ============================================================================
+
+// Get all marks
+app.get('/api/marks', (req, res) => {
+  res.json(marks);
+});
+
+// Create a new mark
+app.post('/api/marks', (req, res) => {
+  const { latitude, longitude, h_acc, label } = req.body;
+
+  if (latitude === undefined || longitude === undefined) {
+    return res.status(400).json({ error: 'latitude and longitude are required' });
+  }
+
+  markCounter++;
+  const mark = {
+    id: markCounter,
+    label: label || `RM_${markCounter}`,
+    latitude,
+    longitude,
+    h_acc: h_acc || null,
+    timestamp: new Date().toISOString(),
+    created_at: Date.now()
+  };
+
+  marks.push(mark);
+  console.log(`Mark created: ${mark.label} at ${latitude.toFixed(9)}, ${longitude.toFixed(9)}`);
+
+  // Broadcast to all connected clients
+  broadcast({ type: 'mark', action: 'create', data: mark });
+
+  res.json(mark);
+});
+
+// Delete a mark
+app.delete('/api/marks/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const index = marks.findIndex(m => m.id === id);
+
+  if (index === -1) {
+    return res.status(404).json({ error: 'Mark not found' });
+  }
+
+  const deleted = marks.splice(index, 1)[0];
+  console.log(`Mark deleted: ${deleted.label}`);
+
+  // Broadcast to all connected clients
+  broadcast({ type: 'mark', action: 'delete', data: { id } });
+
+  res.json({ success: true });
+});
+
+// Update a mark (rename)
+app.patch('/api/marks/:id', (req, res) => {
+  const id = parseInt(req.params.id);
+  const mark = marks.find(m => m.id === id);
+
+  if (!mark) {
+    return res.status(404).json({ error: 'Mark not found' });
+  }
+
+  if (req.body.label) {
+    mark.label = req.body.label;
+  }
+
+  console.log(`Mark updated: ${mark.label}`);
+
+  // Broadcast to all connected clients
+  broadcast({ type: 'mark', action: 'update', data: mark });
+
+  res.json(mark);
+});
+
+// Clear all marks
+app.delete('/api/marks', (req, res) => {
+  const count = marks.length;
+  marks = [];
+  markCounter = 0;
+  console.log(`All marks cleared (${count} marks)`);
+
+  // Broadcast to all connected clients
+  broadcast({ type: 'mark', action: 'clear' });
+
+  res.json({ success: true, deleted: count });
+});
+
 // OTA version endpoint - returns the version string for new firmware
 app.get('/api/ota/version', (req, res) => {
   res.type('text/plain').send(OTA_FIRMWARE_VERSION);
@@ -175,5 +280,7 @@ function getFixStatus(fix_type, carr_soln) {
 server.listen(PORT, () => {
   console.log(`RTK Rover Dashboard server running on port ${PORT}`);
   console.log(`Dashboard: http://localhost:${PORT}`);
+  console.log(`Mobile Survey: http://localhost:${PORT}/portable/`);
   console.log(`API endpoint: http://localhost:${PORT}/api/position`);
+  console.log(`Marks API: http://localhost:${PORT}/api/marks`);
 });
