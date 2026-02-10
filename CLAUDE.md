@@ -52,7 +52,8 @@ pm2 logs rover-dashboard
 ROVER_DASHBOARD/
 ├── backend/
 │   ├── package.json
-│   └── server.js           # Express + WebSocket server
+│   ├── server.js           # Express + WebSocket server
+│   └── marks.json          # Persisted survey marks (auto-generated)
 ├── frontend/
 │   ├── index.html          # Dashboard HTML
 │   ├── styles.css          # Styling
@@ -159,6 +160,7 @@ ROVER_DASHBOARD/
 ### Main Dashboard
 - Real-time position updates via WebSocket
 - Mapbox satellite map with rover marker
+- **Map follow toggle** (crosshair button, top-left of map) — locks/unlocks auto-centering on rover. Auto-disables on manual pan, click to re-lock.
 - RTK status indicator (Fixed/Float/3D)
 - Accuracy display (horizontal/vertical in cm)
 - Satellite count and RTCM data counter
@@ -170,6 +172,7 @@ ROVER_DASHBOARD/
 - **Controls to clear marks and lines**
 
 ### Survey Marks (synced with PORTABLE_DASHBOARD)
+- **Persisted to `backend/marks.json`** — survives server restarts
 - Blue circle markers on map
 - Marks list in sidebar with click-to-fly
 - Delete individual marks
