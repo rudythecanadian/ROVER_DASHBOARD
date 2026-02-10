@@ -10,6 +10,7 @@ const { WebSocketServer } = require('ws');
 const cors = require('cors');
 const http = require('http');
 const path = require('path');
+const fs = require('fs');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -48,9 +49,35 @@ let roverState = {
   last_update: null
 };
 
-// Store marked locations
+// Store marked locations (persisted to disk)
+const MARKS_FILE = path.join(__dirname, 'marks.json');
 let marks = [];
 let markCounter = 0;
+
+// Load marks from disk on startup
+function loadMarks() {
+  try {
+    if (fs.existsSync(MARKS_FILE)) {
+      const data = JSON.parse(fs.readFileSync(MARKS_FILE, 'utf8'));
+      marks = data.marks || [];
+      markCounter = data.markCounter || 0;
+      console.log(`Loaded ${marks.length} marks from disk`);
+    }
+  } catch (e) {
+    console.error('Failed to load marks:', e.message);
+  }
+}
+
+// Save marks to disk
+function saveMarks() {
+  try {
+    fs.writeFileSync(MARKS_FILE, JSON.stringify({ marks, markCounter }, null, 2));
+  } catch (e) {
+    console.error('Failed to save marks:', e.message);
+  }
+}
+
+loadMarks();
 
 // OTA firmware version - update this when you upload new firmware
 const OTA_FIRMWARE_VERSION = '1.0.0';
@@ -190,6 +217,7 @@ app.post('/api/marks', (req, res) => {
   };
 
   marks.push(mark);
+  saveMarks();
   console.log(`Mark created: ${mark.label} at ${latitude.toFixed(9)}, ${longitude.toFixed(9)}`);
 
   // Broadcast to all connected clients
@@ -208,6 +236,7 @@ app.delete('/api/marks/:id', (req, res) => {
   }
 
   const deleted = marks.splice(index, 1)[0];
+  saveMarks();
   console.log(`Mark deleted: ${deleted.label}`);
 
   // Broadcast to all connected clients
@@ -229,6 +258,7 @@ app.patch('/api/marks/:id', (req, res) => {
     mark.label = req.body.label;
   }
 
+  saveMarks();
   console.log(`Mark updated: ${mark.label}`);
 
   // Broadcast to all connected clients
@@ -242,6 +272,7 @@ app.delete('/api/marks', (req, res) => {
   const count = marks.length;
   marks = [];
   markCounter = 0;
+  saveMarks();
   console.log(`All marks cleared (${count} marks)`);
 
   // Broadcast to all connected clients

@@ -25,6 +25,9 @@ class RoverDashboard {
     // Minimum distance (meters) between trail points to avoid clutter
     this.minTrailDistance = 0.5;
 
+    // Map follow mode - auto-center on rover
+    this.followRover = true;
+
     // Survey marks from PORTABLE_DASHBOARD
     this.marks = [];
     this.markMarkers = {};
@@ -37,6 +40,7 @@ class RoverDashboard {
 
   init() {
     this.initMap();
+    this.initFollowControl();
     this.initHeadingControl();
     this.initLocationControl();
     this.initDisplayModeControl();
@@ -69,7 +73,46 @@ class RoverDashboard {
       .setLngLat(CONFIG.MAP.DEFAULT_CENTER)
       .addTo(this.map);
 
+    // Break follow when user drags or zooms the map manually
+    this.map.on('dragstart', (e) => {
+      if (e.originalEvent) this.setFollowRover(false);
+    });
+
     this.map.on('load', () => this.initMapLayers());
+  }
+
+  initFollowControl() {
+    const btn = document.createElement('button');
+    btn.id = 'follow-btn';
+    btn.className = 'follow-btn active';
+    btn.title = 'Center on rover';
+    btn.innerHTML = `<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/>
+      <path d="M12 2v4M12 18v4M2 12h4M18 12h4"/>
+    </svg>`;
+
+    btn.addEventListener('click', () => {
+      this.setFollowRover(!this.followRover);
+      // If re-enabling, immediately snap to rover
+      if (this.followRover && this.currentPosition) {
+        this.map.easeTo({
+          center: [this.currentPosition.longitude, this.currentPosition.latitude],
+          duration: 500
+        });
+      }
+    });
+
+    // Place it on the map container so it floats over the map
+    document.getElementById('map').appendChild(btn);
+  }
+
+  setFollowRover(follow) {
+    this.followRover = follow;
+    const btn = document.getElementById('follow-btn');
+    if (btn) {
+      btn.classList.toggle('active', follow);
+      btn.title = follow ? 'Auto-centering ON (click to unlock)' : 'Auto-centering OFF (click to lock)';
+    }
   }
 
   initMapLayers() {
@@ -455,8 +498,8 @@ class RoverDashboard {
         this.recordTrailPoint(prevPos);
       }
 
-      // Pan map (only if live mode)
-      if (this.locationMode === 'live') {
+      // Pan map (only if live mode and follow is enabled)
+      if (this.locationMode === 'live' && this.followRover) {
         this.map.easeTo({ center: coords, duration: 500 });
       }
     }

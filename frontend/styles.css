@@ -416,6 +416,35 @@ body {
   box-shadow: 0 0 20px rgba(255, 68, 68, 0.5);
 }
 
+/* Follow / Center Lock Button */
+.follow-btn {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 1;
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  border: none;
+  background: rgba(22, 33, 62, 0.9);
+  color: #666;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+  transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+}
+
+.follow-btn:hover {
+  background: rgba(22, 33, 62, 1);
+}
+
+.follow-btn.active {
+  color: #00d9ff;
+  box-shadow: 0 0 10px rgba(0, 217, 255, 0.3);
+}
+
 /* Accuracy circle styling via Mapbox layer */
 .accuracy-circle {
   fill: rgba(0, 217, 255, 0.2);
